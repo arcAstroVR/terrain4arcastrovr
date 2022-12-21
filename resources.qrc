@@ -1,5 +1,5 @@
 <RCC>
-    <qresource prefix="/plugins/terrain4arcastrovr" >
+    <qresource prefix="/plugins/terrain4aAVR" >
         <file>icon.png</file>
     </qresource>
 </RCC>

@@ -3,17 +3,17 @@
 # This file should be included when you package your plugin.# Mandatory items:
 
 [general]
-name=Terrain maker for arcAstroVR
+name=Terrain for arcAstroVR
 qgisMinimumVersion=3.0
 description=Outputs 300km square terrain data for arcAstroVR
-version=0.1.1
+version=0.2
 author=Kuninori Iwashiro (scienceNODE)
 email=iwashiro@science-node.com
 
 about=This plugin creates terrain data for use with "arcAstroVR". "arcAstroVR" is a visualization software for archaeological remains and background celestial bodies. This plugin outputs elevation and texture data for a 300km square 24m mesh with orthophorization, sphere correction and optical correction.
 
-tracker=http://bugs
-repository=http://repo
+tracker=https://github.com/arcAstroVR/terrain4arcastrovr/issues
+repository=https://github.com/arcAstroVR/terrain4arcastrovr
 # End of mandatory metadata
 
 # Recommended items:
@@ -25,11 +25,11 @@ hasProcessingProvider=no
 # Tags are comma separated with spaces allowed
 tags=python
 
-homepage=http://homepage
+homepage=https://arcAstroVR.org
 category=Plugins
 icon=icon.png
 # experimental flag
-experimental=False
+experimental=True
 
 # deprecated flag (applies to the whole plugin, not just a single version)
 deprecated=False
