@@ -1,0 +1,5 @@
+# Ignore Apple filesystem extras
+._*
+.DS_Store
+# Ignore local pycache
+__pycache__
