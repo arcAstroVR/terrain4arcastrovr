@@ -110,9 +110,9 @@ class Terrain4aAVR:
         # preliminary pixel size of inner DEM texture. The final texture will further be resampled from this.
         # GZ: I don't understand why you don't set S_tex_size immediately to 16384 with according pixel size.
         self.S_tex_mesh: float = self.S_dem_mesh / 5
-        QgsMessageLog.logMessage(message=f'S_dem_mesh={self.S_dem_mesh:.2f} m pixel size, '
-                                         f'narrow area S_output_size=({self.S_output_size:.2f} m)²',
-                                 tag='terrain4aAVR', level=Qgis.Info)
+        #QgsMessageLog.logMessage(message=f'S_dem_mesh={self.S_dem_mesh:.2f} m pixel size, '
+        #                                 f'narrow area S_output_size=({self.S_output_size:.2f} m)²',
+        #                         tag='terrain4aAVR', level=Qgis.Info)
 
         # Adjustment values for UnityTerrain:
         #  - zoffset: elevation offset,
@@ -515,8 +515,8 @@ class Terrain4aAVR:
     def terainCalc(self, width: float, dem_mesh: float, dem_layer: str, geo_layer: str, mask_layer: str, mask_array,
                    out_name: str):
         """Output area (m): +1px range is specified for calculation area to support Terrain for Unity
-        width:    raster size (pixels, but as float value?)
-        dem_mesh: resolution (cell size, m)
+        width:    raster size (meters)
+        dem_mesh: target resolution (cell size, m)
         dem_layer: name of DEM layer 
         geo_layer: name of geoid layer
         mask_layer: name of mask layer (TODO: Document its use!)
@@ -526,8 +526,8 @@ class Terrain4aAVR:
         area_rect: str = '-' + str(width / 2) + ',' + str(width / 2 + dem_mesh) + ',-' + str(
             width / 2 + dem_mesh) + ',' + str(width / 2)
 
-        layer = QgsProject.instance().mapLayersByName(dem_layer)[0]
-        uri = layer.dataProvider().dataSourceUri()
+        layer : QgsMapLayer = QgsProject.instance().mapLayersByName(dem_layer)[0]
+        uri : str = layer.dataProvider().dataSourceUri()
 
         # DTM：正斜投影で再投影し画像範囲でクリップ
         # DTM: Reproject with orthographic projection and clip in image range
@@ -545,15 +545,20 @@ class Terrain4aAVR:
             memory_uri = processing.run('gdal:rasterize_over_fixed_value', parameter)
             # self.iface.addRasterLayer(memory_uri ['OUTPUT'], 'over_fixedDEM')
 
-            parameter = {'DATA_TYPE': 7, 'INPUT': memory_uri['OUTPUT'], 'OUTPUT': 'TEMPORARY_OUTPUT',
-                         'TARGET_CRS': self.crs, 'TARGET_RESOLUTION': dem_mesh,
-                         'TARGET_EXTENT': area_rect, 'TARGET_EXTENT_CRS': self.crs}
+            parameter = { 'INPUT': memory_uri['OUTPUT'] }
+            #parameter = {'DATA_TYPE': 7, 'INPUT': memory_uri['OUTPUT'], 'OUTPUT': 'TEMPORARY_OUTPUT',
+            #             'TARGET_CRS': self.crs, 'TARGET_RESOLUTION': dem_mesh,
+            #             'TARGET_EXTENT': area_rect, 'TARGET_EXTENT_CRS': self.crs}
         else:  # ベース地形処理、またはマスク指定がない詳細地形処理
             # Base terrain processing or detailed terrain processing without mask specification
-            parameter = {'DATA_TYPE': 7, 'INPUT': uri, 'OUTPUT': 'TEMPORARY_OUTPUT',
-                         'TARGET_CRS': self.crs, 'TARGET_RESOLUTION': dem_mesh,
-                         'TARGET_EXTENT': area_rect, 'TARGET_EXTENT_CRS': self.crs}
+            parameter = {'INPUT': uri }
+        # Add common parameters
+        parameter |= {'DATA_TYPE': 7, 'OUTPUT': 'TEMPORARY_OUTPUT', 'TARGET_CRS': self.crs,
+                      'TARGET_RESOLUTION': dem_mesh, 'TARGET_EXTENT': area_rect, 'TARGET_EXTENT_CRS': self.crs}
         # TODO - DONE / GZ DEBUG: Why is TARGET RESOLUTION -tr always 5 if configured to be 0.5???
+        # GZ: If dem_mesh<layer_resolution, interpolate!!!! --> add RESAMPLING (bilinear)
+        if (dem_mesh < layer.rasterUnitsPerPixelX()):
+            parameter |= {'RESAMPLING': '1'}
         QgsMessageLog.logMessage("DEM Processing " + str(parameter), tag='terrain4aAVR', level=Qgis.Info)
 
         dem = processing.run('gdal:warpreproject', parameter)
