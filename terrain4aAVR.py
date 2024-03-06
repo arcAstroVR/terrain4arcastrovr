@@ -230,13 +230,14 @@ class Terrain4aAVR:
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
-        # self.marker.hide()
-        # self.wideline.hide()
-        # self.narrowline.hide()
-        # self.canvas.scene().removeItem(self.marker)
-        # self.canvas.scene().removeItem(self.wideline)
-        # self.canvas.scene().removeItem(self.narrowline)
-        # self.canvas.refreshAllLayers()
+        if not self.first_start:
+            self.marker.hide()
+            self.wideline.hide()
+            self.narrowline.hide()
+            self.canvas.scene().removeItem(self.marker)
+            self.canvas.scene().removeItem(self.wideline)
+            self.canvas.scene().removeItem(self.narrowline)
+            self.canvas.refreshAllLayers()
 
         for action in self.actions:
             self.iface.removePluginMenu(
@@ -338,7 +339,10 @@ class Terrain4aAVR:
             # Do something useful here - delete the line containing pass and
             # substitute with your code.
             self.main()
-            pass
+        else:
+            self.wideline.hide()
+            self.narrowline.hide()
+            self.marker.hide()
 
     # ダイアログチェンジイベント || #dialog change event
     def lineEdit1Activated(self):
