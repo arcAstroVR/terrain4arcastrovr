@@ -325,6 +325,12 @@ class Terrain4aAVR:
         # doubleSpinBoxのチェンジイベント || # qdoubleSpinBox change event
         self.dlg.doubleSpinBox.valueChanged.connect(self.spinboxActivated)
 
+        #MaskLayeのチェンジイベント
+        self.dlg.comboBox4.currentIndexChanged.connect(self.combobox4Activated) 
+
+        #MaskLayerのFillValueチェックイベント
+        self.dlg.checkBox5.stateChanged.connect(self.fillvalueActivated)
+
         # show the dialog
         self.dlg.show()
 
@@ -442,6 +448,23 @@ class Terrain4aAVR:
                   QgsPoint(area / 2, -area / 2), QgsPoint(-area / 2, -area / 2)]
         self.narrowline.setToGeometry(QgsGeometry.fromPolyline(points), None)
 
+    def combobox4Activated(self):
+        if self.dlg.comboBox4.currentIndex() != 0:
+            self.dlg.checkBox5.setEnabled(True)
+            self.fillvalueActivated()
+        else:
+            self.dlg.checkBox5.setEnabled(False)
+            self.dlg.doubleSpinBox5.setEnabled(False)
+            self.dlg.label5.setEnabled(False)
+
+    def fillvalueActivated(self):
+        if self.dlg.checkBox5.isChecked():
+            self.dlg.doubleSpinBox5.setEnabled(True)
+            self.dlg.label5.setEnabled(True)
+        else:
+            self.dlg.doubleSpinBox5.setEnabled(False)
+            self.dlg.label5.setEnabled(False)
+
     # noinspection PyMethodMayBeStatic
     def isfloat(self, parameter):
         """Check that decimal point conversion is possible"""
@@ -544,8 +567,10 @@ class Terrain4aAVR:
 
             # Mask_Layerの領域下降処理 || #Mask_Layer area descending process
             layer = QgsProject.instance().mapLayersByName(mask_layer)[0]
-            parameter = {'ADD': True, 'BURN': -self.down, 'EXTRA': '', 'INPUT': layer,
-                         'INPUT_RASTER': memory_uri['OUTPUT'], 'OUTPUT': 'TEMPORARY_OUTPUT'}
+            if self.dlg.checkBox5.isChecked():
+                parameter = { 'ADD' : False, 'BURN' : self.dlg.doubleSpinBox5.value(), 'EXTRA' : '', 'INPUT' : layer, 'INPUT_RASTER' : memory_uri['OUTPUT'], 'OUTPUT' : 'TEMPORARY_OUTPUT' }
+            else:
+                parameter = { 'ADD' : True, 'BURN' : -self.down, 'EXTRA' : '', 'INPUT' : layer, 'INPUT_RASTER' : memory_uri['OUTPUT'], 'OUTPUT' : 'TEMPORARY_OUTPUT' }
             memory_uri = processing.run('gdal:rasterize_over_fixed_value', parameter)
             # self.iface.addRasterLayer(memory_uri ['OUTPUT'], 'over_fixedDEM')
 
@@ -556,13 +581,14 @@ class Terrain4aAVR:
         else:  # ベース地形処理、またはマスク指定がない詳細地形処理
             # Base terrain processing or detailed terrain processing without mask specification
             parameter = {'INPUT': uri }
+            # TODO - DONE / GZ DEBUG: Why is TARGET RESOLUTION -tr always 5 if configured to be 0.5???
+            # GZ: If dem_mesh<layer_resolution, interpolate!!!! --> add RESAMPLING (bilinear)
+            # Iwashiro: Moved the code location to prevent errors from occurring when specifying a Vector mask layer.
+            if (dem_mesh < layer.rasterUnitsPerPixelX()):
+                parameter |= {'RESAMPLING': '1'}
         # Add common parameters
         parameter |= {'DATA_TYPE': 7, 'OUTPUT': 'TEMPORARY_OUTPUT', 'TARGET_CRS': self.crs,
                       'TARGET_RESOLUTION': dem_mesh, 'TARGET_EXTENT': area_rect, 'TARGET_EXTENT_CRS': self.crs}
-        # TODO - DONE / GZ DEBUG: Why is TARGET RESOLUTION -tr always 5 if configured to be 0.5???
-        # GZ: If dem_mesh<layer_resolution, interpolate!!!! --> add RESAMPLING (bilinear)
-        if (dem_mesh < layer.rasterUnitsPerPixelX()):
-            parameter |= {'RESAMPLING': '1'}
         QgsMessageLog.logMessage("DEM Processing " + str(parameter), tag='terrain4aAVR', level=Qgis.Info)
 
         dem = processing.run('gdal:warpreproject', parameter)
@@ -625,28 +651,24 @@ class Terrain4aAVR:
                 # blh[]=[lat, lon, ht]: blh[2]=Sphere descent value (+ value)
                 # zoffset: Altitude offset, down: Amount of descent of mask area
                 level = (z - blh[2] + self.zoffset) * co_level  # 0〜65536(-1000m=0, 0m=6553, 9000m=65536)：球体補正後の高さ || Height after sphere correction
-                # 詳細マスク付き基本地形 || #Basic terrain with detailed mask
-                if out_name == "wideTerrain_DTM" and mask:
+                #全ての地形
+                if (dem_array[w,h] == np.nan)or(dem_array[w,h]>=32767)or(dem_array[w,h]<=-9999): #nodataの場合は0を設定
+                    level = 0
+                #詳細地形付き基本地形
+                elif out_name == "wideTerrain_DTM" and mask:
                     center_x = int(w - half_px_size)
                     center_y = int(h - half_px_size)
-                    if abs(center_x) < mask_w and abs(center_y) < mask_w:
-                        # マスク領域内の処理 || #Processing within the mask area
-                        mask_z = mask_array[int(center_x + mask_w), int(center_y + mask_w)]
-                        # 0〜65536(-1000m=0, 0m=6553, 9000m=65536)：球体補正後の高さ || Height after sphere correction
-                        if mask_z > (self.zoffset - blh[2]) * co_level:
-                            # 詳細地形が地球楕円体より高い場合は、詳細地形-self.downを基本地形にセットする。
-                            # #If the detailed terrain is higher than the earth ellipsoid, set detailed terrain-self.down to the basic terrain.
-                            level = mask_z - self.down * co_level
-                # 詳細マスクなし基本地形 / 詳細地形：標高データが水面より下の場合、地球楕円体-1mを設定
-                # Basic terrain without detailed mask / Detailed terrain: If the elevation data is below the water surface, set earth ellipsoid -1m
-                elif dem_array[w, h] <= 0:
-                    level = (self.zoffset - blh[2] - 1) * co_level
-                # 全ての地形 || #all terrain
-                if dem_array[w, h] == np.nan or level < 0:
-                    # nodataまたは球体補正後の高さが負の場合は0を設定
-                    # Set 0 if nodata or height after sphere correction is negative
-                    level = 0
-                out_array[w, h] = level
+                    if abs(center_x) < mask_w and abs(center_y) < mask_w:	#マスク領域内の処理
+                        mask_z = mask_array[int(center_x+mask_w),int(center_y+mask_w)]	#0〜65536(-1000m=0, 0m=6553, 9000m=65536)：球体補正後の高さ
+                        if (mask_z < level)and(mask_z != 0) :	#詳細地形が基本地形より低い場合は、詳細地形-self.downを基本地形にセットする。
+                            level = mask_z - self.down*co_level
+                #詳細地形なし基本地形 / 詳細地形：標高データが水面より下の場合、地球楕円体を設定
+                #elif dem_array[w,h] <= 0:
+                #	level = (self.zoffset-blh[2])*co_level
+                out_array[w,h] = level
+
+        #UInt16への変換準備として、負の数値を0に統一
+        out_array[out_array < 0] = 0
 
         # プログレスバーの非表示 || #Hide progress bar
         self.iface.messageBar().clearWidgets()

@@ -6,7 +6,7 @@
 name=Terrain for arcAstroVR
 qgisMinimumVersion=3.0
 description=Outputs 300km square terrain data for arcAstroVR
-version=0.2
+version=0.5
 author=Kuninori Iwashiro (scienceNODE)
 email=iwashiro@science-node.com
 
